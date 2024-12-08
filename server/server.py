@@ -1,14 +1,28 @@
 import asyncio
 import logging
+import json
+import os
+import argparse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ShadowsocksServer:
-    def __init__(self, host='0.0.0.0', port=8388):
-        self.host = host
-        self.port = port
+    def __init__(self, config_path):
+        self.config = self.load_config(config_path)
+        self.host = self.config['server']
+        self.port = self.config['server_port']
+        self.password = self.config['password']
+        self.method = self.config['method']
+        self.timeout = 300
         
+    def load_config(self, config_path):
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+            
+        with open(config_path, 'r') as f:
+            return json.load(f)
+            
     async def handle_connection(self, reader, writer):
         addr = writer.get_extra_info('peername')
         logger.info(f'New connection from {addr}')
@@ -19,7 +33,6 @@ class ShadowsocksServer:
                 if not data:
                     break
                     
-                # Echo the received data back (for testing)
                 writer.write(data)
                 await writer.drain()
                 
@@ -38,11 +51,17 @@ class ShadowsocksServer:
         )
         
         logger.info(f'Server started on {self.host}:{self.port}')
+        logger.info(f'Encryption method: {self.method}')
         
         async with server:
             await server.serve_forever()
 
-# Run the server
+def parse_args():
+    parser = argparse.ArgumentParser(description='Shadowsocks server')
+    parser.add_argument('-c', '--config', required=True, help='Path to config file')
+    return parser.parse_args()
+
 if __name__ == '__main__':
-    server = ShadowsocksServer()
+    args = parse_args()
+    server = ShadowsocksServer(args.config)
     asyncio.run(server.start())
